@@ -1,0 +1,946 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgriNet India</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+  <style>
+    /* CSS Variables & Reset */
+    :root {
+      --bg: #f8faf9;
+      --bg-card: #ffffff;
+      --text-main: #1f2937;
+      --text-muted: #6b7280;
+      --text-light: #9ca3af;
+      --primary: #15803d;     /* Clean agricultural green */
+      --primary-hover: #166534;
+      --border: #e5e7eb;
+      --accent-soil: #9a3412;
+      --accent-water: #0369a1;
+      
+      --health-good: #16a34a;
+      --health-watch: #ca8a04;
+      --health-poor: #dc2626;
+
+      --font-ui: 'Inter', system-ui, sans-serif;
+      --font-display: 'Outfit', sans-serif;
+      
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline:3px solid #1d4ed8; outline-offset:2px; }
+    @media (max-width:700px) { main { padding:16px; } header { padding:12px 16px; } }
+    
+    body {
+      background: var(--bg);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select {
+      font-family: inherit;
+      outline: none;
+    }
+
+    /* Layout */
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: var(--shadow-sm);
+    }
+    
+    .brand {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .brand h1 {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: -0.02em;
+    }
+    
+    .brand h1 span { color: var(--primary); }
+    
+    .brand p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .lang-select {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .lang-select:hover { border-color: var(--primary); }
+
+    /* Main Navigation */
+    nav {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      display: flex;
+      gap: 32px;
+      overflow-x: auto;
+    }
+
+    .nav-btn {
+      background: none;
+      border: none;
+      padding: 16px 0;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      position: relative;
+      white-space: nowrap;
+    }
+
+    .nav-btn:hover { color: var(--text-main); }
+    
+    .nav-btn.active {
+      color: var(--primary);
+      font-weight: 600;
+    }
+    
+    .nav-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--primary);
+      border-radius: 3px 3px 0 0;
+    }
+
+    /* Content Area */
+    main {
+      flex: 1;
+      padding: 32px;
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .view-section {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    .view-section.active { display: block; }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Utilities */
+    .grid { display: grid; }
+    .grid-2 { grid-template-columns: 1fr 1fr; gap: 24px; }
+    @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+    #field-content .grid-2 { grid-template-columns: minmax(0, 1fr); }
+    #field-content .card { box-shadow: var(--shadow-sm); }
+    .card { border: 1px solid var(--border); }
+    .btn { transition: transform .15s ease, box-shadow .15s ease, background .15s ease; }
+    .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow); }
+    @media (max-width: 720px) {
+      header { padding: 12px 16px; }
+      .header-actions { gap: 8px; }
+      .nav-btn { padding: 10px 12px; }
+    }
+    
+    .grid-stats { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+    }
+    
+    .card-header {
+      margin-bottom: 20px;
+    }
+    
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+    
+    .card-subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn:hover:not(:disabled) { background: var(--primary-hover); }
+    .btn-secondary { background: var(--bg); color: var(--text-main); border: 1px solid var(--border); }
+    .btn-secondary:hover:not(:disabled) { border-color: var(--primary); background: #f0fdf4; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    
+    .badge-live { background: #dcfce7; color: #166534; }
+    .badge-model { background: #e0e7ff; color: #3730a3; }
+    .badge-pre { background: #f3f4f6; color: #4b5563; }
+    .badge-demo { background: #ffedd5; color: #9a3412; }
+    .badge-err { background: #fee2e2; color: #991b1b; }
+
+    /* Map */
+    #map {
+      height: 400px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      z-index: 1;
+    }
+
+    /* Health Gauge */
+    .health-widget {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 0;
+    }
+    
+    .gauge-circle {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: 8px solid var(--border);
+      position: relative;
+    }
+    
+    .gauge-circle[data-status="healthy"] { border-color: var(--health-good); }
+    .gauge-circle[data-status="watch"] { border-color: var(--health-watch); }
+    .gauge-circle[data-status="stressed"] { border-color: var(--health-poor); }
+    .gauge-circle[data-status="no_land"] { border-color: #60a5fa; }
+    .gauge-circle[data-status="unavailable"] { border-color: var(--border); }
+    
+    .gauge-val { font-family: var(--font-display); font-size: 42px; font-weight: 700; line-height: 1; }
+    .gauge-max { font-size: 16px; color: var(--text-muted); font-weight: 500; }
+    
+    .health-status {
+      margin-top: 16px;
+      font-size: 18px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Data Points */
+    .data-point {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-point:last-child { border-bottom: none; }
+    .diagnosis-point { display: block; padding: 14px 0; }
+    .diagnosis-point .dp-label { display: block; margin-bottom: 6px; }
+    .diagnosis-point .dp-val { display: block; white-space: normal; overflow-wrap: anywhere; line-height: 1.65; }
+    
+    .dp-label { color: var(--text-muted); font-size: 14px; font-weight: 500; }
+    .dp-val { font-size: 15px; font-weight: 600; }
+
+    /* AI Advice */
+    .advice-block {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .recommendation {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--primary);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    
+    .why-toggle {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    
+    .why-toggle:hover { background: var(--bg); color: var(--text-main); }
+    
+    .why-content {
+      display: none;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border);
+      font-size: 13px;
+    }
+    
+    .evidence-tag {
+      display: inline-block;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 11px;
+      margin: 2px;
+      color: var(--text-muted);
+    }
+
+    /* Scenarios */
+    .scenario-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
+    }
+    
+    .scenario-btn:hover {
+      border-color: var(--primary);
+      box-shadow: var(--shadow-sm);
+    }
+    
+    .sb-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+    .sb-sub { color: var(--text-muted); font-size: 13px; }
+
+    /* File Upload */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--bg);
+    }
+    
+    .drop-zone:hover { border-color: var(--primary); background: #f0fdf4; }
+    
+    .drop-zone input[type="file"] { display: none; }
+    
+    .preview-img {
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: var(--radius-sm);
+      display: none;
+      margin-top: 16px;
+    }
+
+    /* Status Bar */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    /* Network Map Placeholder */
+    .network-viz {
+      height: 400px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .node {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      background: var(--primary);
+      border-radius: 50%;
+      box-shadow: 0 0 0 4px rgba(21, 128, 61, 0.2);
+    }
+
+    /* Loader */
+    .loader {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(21, 128, 61, 0.3);
+      border-radius: 50%;
+      border-top-color: var(--primary);
+      animation: spin 1s ease-in-out infinite;
+    }
+    
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Interoperability collaboration workspace */
+    .interop-root { display:grid; gap:18px; max-width:1420px; margin:0 auto; }
+    .interop-hero { display:flex; justify-content:space-between; align-items:flex-end; gap:28px; min-height:235px; padding:34px 38px; overflow:hidden; border-radius:18px; color:#fff; background:radial-gradient(circle at 90% 15%,rgba(191,219,254,.22),transparent 26%),linear-gradient(120deg,#0d422e,#116542 62%,#1c7550); box-shadow:0 14px 38px rgba(15,75,49,.15); }
+    .interop-hero-copy { max-width:760px; }
+    .interop-eyebrow,.interop-kicker { display:block; font-size:10px; font-weight:700; letter-spacing:.13em; }
+    .interop-eyebrow { color:#b8e2c9; margin-bottom:12px; }
+    .interop-hero h1 { color:#fff; font:600 clamp(27px,3vw,38px)/1.15 var(--font-display); margin:0 0 12px; }
+    .interop-hero p { color:#e3f3e9; max-width:720px; line-height:1.65; }
+    .interop-hero-actions { display:flex; align-items:center; gap:20px; margin-top:22px; }
+    .interop-hero a { color:#effbf2; font-weight:600; font-size:13px; }
+    .interop-health { display:flex; align-items:center; gap:12px; min-width:225px; padding:14px 16px; border:1px solid rgba(255,255,255,.25); border-radius:12px; background:rgba(255,255,255,.1); backdrop-filter:blur(8px); }
+    .interop-health strong,.interop-health small { display:block; }
+    .interop-health strong { color:white; font-size:13px; }
+    .interop-health small { color:#d5ebde; font-size:11px; margin-top:2px; }
+    .interop-health-dot { width:10px; height:10px; flex:none; border-radius:50%; background:#7ce1a4; box-shadow:0 0 0 4px rgba(124,225,164,.17); }
+    .interop-health.is-error .interop-health-dot { background:#ffb4a8; box-shadow:0 0 0 4px rgba(255,180,168,.18); }
+    .interop-stat-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+    .interop-stat { display:flex; align-items:center; gap:14px; min-height:105px; padding:17px; background:white; border:1px solid #e6ece8; border-radius:13px; box-shadow:0 2px 8px rgba(20,54,37,.035); }
+    .interop-stat-icon { display:grid; place-items:center; width:40px; height:40px; flex:none; border-radius:12px; color:#12623e; background:#eaf6ee; font-size:20px; }
+    .interop-stat small,.interop-stat strong,.interop-stat span:not(.interop-stat-icon) { display:block; }
+    .interop-stat small { color:#69776e; font-size:11px; font-weight:600; }
+    .interop-stat strong { color:#173a29; font:600 25px var(--font-display); margin:1px 0; }
+    .interop-stat div span { color:#849087; font-size:10px; }
+    .interop-main-grid { display:grid; grid-template-columns:minmax(0,1.12fr) minmax(340px,.88fr); gap:16px; align-items:start; }
+    .interop-panel { padding:23px; border:1px solid #e4ebe6; border-radius:15px; background:#fff; box-shadow:0 3px 12px rgba(20,54,37,.035); min-width:0; }
+    .interop-section-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:18px; }
+    .interop-kicker { color:#278250; margin-bottom:6px; }
+    .interop-section-heading h2 { font:600 20px/1.25 var(--font-display); letter-spacing:-.02em; color:#193a29; }
+    .interop-section-heading p { color:#748078; margin-top:6px; font-size:12px; max-width:620px; }
+    .interop-badge { white-space:nowrap; display:inline-flex; align-items:center; padding:6px 9px; border-radius:999px; font-size:9px; font-weight:700; letter-spacing:.06em; }
+    .interop-badge-demo { color:#85600a; background:#fff5d9; border:1px solid #f2df9d; }
+    .interop-badge-neutral { color:#4a6655; background:#f0f5f1; border:1px solid #dfe9e1; }
+    .interop-badge-warning { color:#8a5013; background:#fff2df; border:1px solid #f3d4a8; }
+    .interop-participant-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+    .interop-participant { display:flex; align-items:center; gap:10px; padding:11px 12px; border:1px solid #edf1ee; border-radius:11px; background:linear-gradient(120deg,#fff,#fbfdfb); }
+    .interop-participant-mark { display:grid; place-items:center; width:34px; height:34px; flex:none; border-radius:10px; color:#155f3c; background:#eaf5ed; font-weight:700; font-size:11px; }
+    .interop-participant strong,.interop-participant small { display:block; }
+    .interop-participant strong { color:#284735; font-size:12px; }
+    .interop-participant small { color:#879189; font-size:10px; margin-top:2px; }
+    .interop-status-off { margin-left:auto; white-space:nowrap; color:#8a6a1b; font-size:9px; font-weight:700; }
+    .interop-note { padding:11px 13px; margin-top:13px; border-radius:9px; color:#5d694f; background:#f7f8ef; border:1px solid #ececdb; font-size:11px; line-height:1.55; }
+    .interop-exchange { border-color:#d6e8dc; box-shadow:0 5px 18px rgba(21,101,61,.07); }
+    .interop-step-mark { color:#5a8a6a; font-size:10px; font-weight:700; white-space:nowrap; }
+    .interop-form { display:grid; gap:9px; }
+    .interop-form label,.interop-filters label { display:grid; gap:5px; color:#536259; font-size:10px; font-weight:700; }
+    .interop-form select,.interop-filters input,.interop-filters select { width:100%; min-width:0; height:38px; padding:0 10px; border:1px solid #dfe7e1; border-radius:8px; color:#274332; background:#fff; font:500 12px var(--font-ui); }
+    .interop-form select:focus,.interop-filters input:focus,.interop-filters select:focus { outline:3px solid rgba(29,78,216,.22); border-color:#3c8b5c; }
+    .interop-exchange-arrow { text-align:center; height:8px; color:#52916a; font-size:16px; line-height:8px; }
+    .interop-action-row { display:flex; gap:8px; margin-top:5px; }
+    .interop-button { min-height:38px; display:inline-flex; justify-content:center; align-items:center; gap:8px; padding:9px 13px; border:1px solid transparent; border-radius:8px; cursor:pointer; text-decoration:none; font:600 11px var(--font-ui); transition:background .15s,border-color .15s,transform .15s; }
+    .interop-button:hover:not(:disabled) { transform:translateY(-1px); }
+    .interop-button:focus-visible,.interop-tab:focus-visible,.interop-close:focus-visible { outline:3px solid #1d4ed8; outline-offset:2px; }
+    .interop-button:disabled { opacity:.45; cursor:not-allowed; }
+    .interop-button-primary { color:#fff; background:#16804b; }
+    .interop-button-primary:hover:not(:disabled) { background:#11683d; }
+    .interop-button-secondary { color:#23613d; background:#fff; border-color:#cfdfd3; }
+    .interop-button-secondary:hover:not(:disabled) { background:#f3faf5; }
+    .interop-button-light { color:#145637; background:#fff; }
+    .interop-button-quiet { color:#53645a; background:#f8faf8; border-color:#e4ebe6; }
+    .interop-record-preview,.interop-validation,.interop-exchange-result { margin-top:12px; padding:12px; border-radius:10px; background:#f8faf8; border:1px solid #e5ebe6; font-size:11px; }
+    .interop-record-preview h3,.interop-validation h3,.interop-exchange-result h3 { color:#264833; font-size:12px; margin-bottom:7px; }
+    .interop-preview-meta { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0; }
+    .interop-chip { padding:4px 7px; border-radius:999px; color:#4b6554; background:#edf4ef; font-size:9px; }
+    .interop-preview-body { color:#64736a; line-height:1.55; }
+    .interop-result-good { background:#effaf2; border-color:#cce9d4; }
+    .interop-result-bad { background:#fff5f2; border-color:#f2d4ca; }
+    .interop-issue-list { padding-left:17px; margin-top:7px; color:#7a493c; line-height:1.6; }
+    .interop-warning-list { padding-left:17px; margin-top:7px; color:#795f29; line-height:1.6; }
+    .interop-mapping-details { margin-top:8px; color:#596a60; }
+    .interop-mapping-details summary { cursor:pointer; font-weight:600; }
+    .interop-microcopy { color:#849087; font-size:9px; margin-top:10px; }
+    .interop-activity-panel { padding-bottom:12px; }
+    .interop-activity-list { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; list-style:none; }
+    .interop-activity-item { padding:10px; border-radius:9px; background:#f8faf8; border:1px solid #edf1ee; min-width:0; }
+    .interop-activity-item strong { display:block; color:#41564a; font-size:10px; line-height:1.4; }
+    .interop-activity-item small { display:block; color:#8a958e; font-size:9px; margin-top:5px; }
+    .interop-activity-tag { display:inline-flex; margin-bottom:5px; color:#32734b; text-transform:uppercase; letter-spacing:.08em; font-weight:700; font-size:8px; }
+    .interop-empty { padding:20px !important; text-align:center; color:#87928a; font-size:12px; }
+    .interop-skeleton { min-height:65px; display:grid; place-items:center; color:#8b968e; border:1px dashed #dce6de; border-radius:9px; font-size:11px; }
+    .interop-tabs { display:flex; gap:6px; border-bottom:1px solid #dfe8e1; overflow:auto; }
+    .interop-tab { flex:none; padding:11px 15px; border:0; border-bottom:2px solid transparent; color:#718077; background:transparent; cursor:pointer; font:600 12px var(--font-ui); }
+    .interop-tab[aria-selected="true"] { color:#17683d; border-bottom-color:#20844e; }
+    .interop-tab-panel[hidden] { display:none; }
+    .interop-filters { display:grid; grid-template-columns:1.5fr repeat(3,minmax(110px,1fr)); gap:9px; align-items:end; padding:14px; margin-bottom:13px; border-radius:10px; background:#f8faf8; }
+    .interop-filters .interop-search { grid-column:span 1; }
+    .interop-filters input,.interop-filters select { height:35px; font-size:11px; }
+    .interop-table-wrap { width:100%; overflow-x:auto; }
+    .interop-table { width:100%; border-collapse:collapse; min-width:740px; text-align:left; }
+    .interop-table th { padding:10px 9px; color:#819087; border-bottom:1px solid #e8ede9; text-transform:uppercase; letter-spacing:.07em; font-size:9px; }
+    .interop-table td { padding:11px 9px; color:#54645a; border-bottom:1px solid #f0f3f1; font-size:10px; vertical-align:middle; }
+    .interop-table td:first-child { color:#294a36; font-weight:600; }
+    .interop-record-open { padding:0; border:0; color:#267149; background:none; cursor:pointer; text-align:left; font:600 11px var(--font-ui); text-decoration:underline; text-underline-offset:3px; }
+    .interop-table-footer { display:flex; justify-content:space-between; align-items:center; gap:12px; padding-top:10px; color:#78857d; font-size:10px; }
+    .interop-table-footer>div { display:flex; gap:5px; }
+    .interop-practice-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .interop-practice-card { padding:16px; border:1px solid #e5ece6; border-radius:11px; background:linear-gradient(145deg,#fff,#f8fbf8); }
+    .interop-practice-card h3 { color:#244833; font:600 15px var(--font-display); }
+    .interop-practice-card p { margin-top:8px; color:#66756b; font-size:11px; line-height:1.55; }
+    .interop-practice-card dl { display:grid; grid-template-columns:110px 1fr; gap:5px 10px; margin-top:12px; font-size:10px; }
+    .interop-practice-card dt { color:#879189; }
+    .interop-practice-card dd { color:#42594a; }
+    .interop-dev-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    .interop-dev-grid h3 { margin:14px 0 8px; color:#395444; font-size:12px; }
+    .interop-schema-list { display:flex; flex-wrap:wrap; gap:6px; }
+    .interop-endpoint-list { list-style:none; display:grid; gap:5px; }
+    .interop-endpoint-list li { display:flex; gap:8px; align-items:flex-start; color:#607067; font-size:10px; }
+    .interop-method { display:inline-block; min-width:38px; color:#226b43; font:700 9px monospace; }
+    .interop-code { max-height:270px; overflow:auto; padding:12px; border-radius:9px; color:#dbe8df; background:#172a20; font:10px/1.55 ui-monospace,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .interop-standards { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; margin-top:17px; padding-top:13px; border-top:1px solid #edf1ee; color:#7a877f; font-size:10px; }
+    .interop-standards a,.interop-inline-link { color:#277449; font-size:10px; font-weight:600; }
+    .interop-openapi-details { margin-top:16px; color:#54705f; font-size:11px; }
+    .interop-openapi-details summary { cursor:pointer; font-weight:700; padding:8px 0; }
+    .interop-dialog { width:min(720px,calc(100vw - 28px)); max-height:min(82vh,900px); margin:auto; padding:22px; border:1px solid #dce7df; border-radius:15px; color:#284434; box-shadow:0 24px 80px rgba(12,42,26,.25); }
+    .interop-dialog::backdrop { background:rgba(15,35,24,.45); backdrop-filter:blur(2px); }
+    .interop-dialog-head { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; margin-bottom:15px; }
+    .interop-dialog-head h2 { font:600 20px var(--font-display); }
+    .interop-close { width:34px; height:34px; border:0; border-radius:50%; color:#48604f; background:#edf4ef; cursor:pointer; font-size:21px; }
+    .interop-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; margin:12px 0; }
+    .interop-detail-field { padding:10px; border-radius:8px; background:#f6f9f6; overflow-wrap:anywhere; }
+    .interop-detail-field small,.interop-detail-field strong { display:block; }
+    .interop-detail-field small { color:#829087; font-size:9px; }
+    .interop-detail-field strong { color:#385340; margin-top:3px; font-size:11px; }
+    .interop-dialog pre { margin-top:12px; }
+    .interop-alert { padding:12px 15px; color:#7c3d31; background:#fff3ef; border:1px solid #f0d2c9; border-radius:9px; font-size:12px; }
+    /* Visual refinements */
+    body { background: radial-gradient(circle at 0 0, #ecfdf3 0, transparent 420px), var(--bg); }
+    header { background: rgb(255 255 255 / .92); backdrop-filter: blur(8px); }
+    .brand-logo { height: 64px; display: block; object-fit: contain; object-position: left; }
+    .lang-select { padding: 8px 32px 8px 12px; appearance: none; border-radius: 999px; background: var(--bg-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center; box-shadow: var(--shadow-sm); }
+    nav { overflow-y: hidden; scrollbar-width: none; }
+    .nav-btn { transition: color .15s ease; }
+    .card { transition: box-shadow .2s ease, border-color .2s ease; }
+    .card-header { padding-bottom: 14px; border-bottom: 1px solid #f1f5f2; }
+
+    .voice-card { margin-bottom: 20px; border: 1px solid #bbf7d0; border-left: 5px solid var(--primary); background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 55%); box-shadow: 0 6px 20px rgb(21 128 61 / .08); }
+    .voice-status { margin-top: 14px; padding: 10px 14px; border-radius: var(--radius-sm); background: rgb(255 255 255 / .8); border: 1px solid #dcfce7; color: var(--text-main); font-size: 14px; }
+    .voice-status::before { content: '●'; color: var(--primary); margin-right: 8px; font-size: 10px; vertical-align: middle; }
+    #voice-transcript:not(:empty) { padding: 4px 2px; }
+    .vt-row { max-width: 85%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.55; animation: fadeIn .25s ease; }
+    .vt-you { justify-self: end; background: #eff6ff; border: 1px solid #dbeafe; border-bottom-right-radius: 4px; }
+    .vt-bot { justify-self: start; background: #ffffff; border: 1px solid #dcfce7; border-bottom-left-radius: 4px; }
+    #voice-text-form input:focus, #voice-place:focus, #lat-input:focus, #lon-input:focus, #crop-input:focus, #dx-crop:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgb(21 128 61 / .15); }
+
+    .status-bar { width: fit-content; max-width: 100%; border-radius: 999px; padding: 8px 16px; box-shadow: var(--shadow-sm); }
+    .scenario-btn { position: relative; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+    .scenario-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+    .scenario-btn::after { content: '→'; position: absolute; right: 14px; bottom: 12px; color: var(--primary); opacity: 0; transition: opacity .15s ease, transform .15s ease; }
+    .scenario-btn:hover::after { opacity: 1; transform: translateX(2px); }
+    #map { box-shadow: inset 0 0 0 1px var(--border); }
+
+    /* Health gauge: conic arc proportional to the score (--score set from renderField). */
+    .gauge-circle { --ring: #cbd5e1; border: none; background: conic-gradient(var(--ring) calc(var(--score, 0) * 1%), #eef2ef 0); }
+    .gauge-circle::before { content: ''; position: absolute; inset: 11px; border-radius: 50%; background: var(--bg-card); box-shadow: inset 0 1px 4px rgb(0 0 0 / .06); }
+    .gauge-circle > * { position: relative; }
+    .gauge-circle[data-status="healthy"] { --ring: var(--health-good); }
+    .gauge-circle[data-status="watch"] { --ring: var(--health-watch); }
+    .gauge-circle[data-status="stressed"], .gauge-circle[data-status="poor"] { --ring: var(--health-poor); }
+    .gauge-circle[data-status="no_land"] { background: #60a5fa; }
+
+    .drop-zone.is-dragover { border-color: var(--primary); background: #dcfce7; transform: scale(1.01); }
+    #adv-content details summary { list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    #adv-content details summary::-webkit-details-marker { display: none; }
+    #adv-content details summary::after { content: '▾'; transition: transform .2s ease; }
+    #adv-content details[open] summary::after { transform: rotate(180deg); }
+    #adv-content details:hover { border-color: #bbf7d0 !important; }
+
+    @media (max-width: 720px) { .brand-logo { height: 48px; } .vt-row { max-width: 100%; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+    @media (max-width:1050px) { .interop-main-grid { grid-template-columns:1fr; } .interop-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:700px) { .interop-root { gap:12px; } .interop-hero { min-height:0; align-items:flex-start; flex-direction:column; padding:24px 20px; gap:19px; } .interop-health { width:100%; } .interop-stat-grid { grid-template-columns:1fr 1fr; gap:8px; } .interop-stat { min-height:90px; padding:12px 9px; gap:9px; } .interop-stat-icon { width:32px; height:32px; } .interop-stat strong { font-size:21px; } .interop-stat small { font-size:9px; } .interop-stat div span { font-size:8px; } .interop-panel { padding:16px 13px; border-radius:12px; } .interop-section-heading { gap:8px; } .interop-section-heading h2 { font-size:17px; } .interop-section-heading p { font-size:10px; } .interop-participant-grid,.interop-practice-grid,.interop-dev-grid { grid-template-columns:1fr; } .interop-status-off { font-size:8px; } .interop-activity-list { grid-template-columns:1fr 1fr; } .interop-filters { grid-template-columns:1fr 1fr; padding:10px; } .interop-filters .interop-search { grid-column:1 / -1; } .interop-filters label:nth-of-type(3) { grid-column:1 / -1; } .interop-action-row { flex-direction:column; } .interop-action-row .interop-button { width:100%; } .interop-dialog { padding:17px; } .interop-detail-grid { grid-template-columns:1fr 1fr; } }
+
+  </style>
+  <script src="/static/lang.js"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <header>
+      <div class="brand">
+        <img class="brand-logo" src="/static/logo.png" alt="AgriNet India Logo">
+        <p data-i18n="appDesc" style="display: none;">Evidence-grounded agricultural intelligence layer</p>
+      </div>
+      <div class="header-actions">
+        <label for="lang" class="sr-only" data-i18n="langLabel">Language</label>
+        <select id="lang" class="lang-select">
+          <option value="en">English</option>
+          <option value="hi" selected>हिन्दी</option>
+          <option value="ta">தமிழ்</option>
+          <option value="te">తెలుగు</option>
+          <option value="bn">বাংলা</option>
+          <option value="mr">मराठी</option>
+          <option value="pa">ਪੰਜਾਬੀ</option>
+          <option value="gu">ગુજરાતી</option>
+          <option value="kn">ಕನ್ನಡ</option>
+          <option value="ml">മലയാളം</option>
+        </select>
+      </div>
+    </header>
+
+    <nav>
+      <button class="nav-btn active" data-target="view-dashboard" data-i18n="navDashboard">Dashboard</button>
+      <button class="nav-btn" data-target="view-field" data-i18n="navField">Field Intelligence</button>
+      <button class="nav-btn" data-target="view-advisory" data-i18n="navAdvisory">AI Advisory</button>
+      <button class="nav-btn" data-target="view-doctor" data-i18n="navDoctor">Crop Doctor</button>
+      <button class="nav-btn" data-target="view-network" data-i18n="navNetwork">Network / API</button>
+    </nav>
+
+    <main>
+      <!-- DASHBOARD -->
+      <section id="view-dashboard" class="view-section active">
+        <div class="card voice-card" id="voice-advisor" aria-labelledby="voice-title">
+          <div style="display:flex; justify-content:space-between; gap:16px; align-items:center; flex-wrap:wrap;">
+            <div>
+              <h2 id="voice-title" class="card-title" style="font-size:24px;">Talk with your field advisor</h2>
+              <p class="card-subtitle">Spoken conversation works in English and Hindi. Your microphone starts only when you press the button — you can always type or use the map instead.</p>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn" id="voice-start" type="button">🎙 Start voice conversation</button>
+              <button class="btn btn-secondary" id="voice-stop" type="button">Stop speech</button>
+            </div>
+          </div>
+          <p id="voice-status" class="voice-status" role="status" aria-live="polite">Voice is optional. Choose a field on the map, or start a guided conversation.</p>
+          <p id="voice-privacy" style="font-size:13px; color:var(--text-muted); margin-top:6px;">Voice uses your browser's built-in speech service. AgriNet does not record or store audio.</p>
+          <div id="voice-location-actions" style="display:none; gap:8px; flex-wrap:wrap; margin-top:12px;">
+            <button class="btn btn-secondary" id="voice-geolocate" type="button">Use device location</button>
+            <button class="btn btn-secondary" id="voice-confirm-location" type="button">Confirm pinned field</button>
+            <span style="align-self:center; color:var(--text-muted);">The device location may differ from your field. You can move the map pin.</span>
+          </div>
+          <form id="voice-location-search" style="display:none; gap:8px; margin-top:10px;">
+            <label for="voice-place" class="sr-only">Search for a village or place in India</label>
+            <input id="voice-place" type="search" minlength="2" maxlength="120" placeholder="Village or place name" style="flex:1; min-width:150px; padding:11px; border:1px solid var(--border); border-radius:8px; font-size:16px;">
+            <button class="btn btn-secondary" type="submit">Search place</button>
+          </form>
+          <div id="voice-location-results" role="list" style="display:grid; gap:6px; margin-top:8px;"></div>
+          <div id="voice-transcript" aria-live="polite" aria-label="Conversation transcript" style="display:grid; gap:8px; max-height:220px; overflow:auto; margin-top:12px;"></div>
+          <form id="voice-text-form" style="display:flex; gap:8px; margin-top:12px;">
+            <label for="voice-text" class="sr-only">Type your answer</label>
+            <input id="voice-text" type="text" autocomplete="off" placeholder="Type your answer here" style="flex:1; min-width:150px; padding:12px; border:1px solid var(--border); border-radius:8px; font-size:16px;">
+            <button class="btn btn-secondary" type="submit">Send</button>
+          </form>
+          <button class="btn btn-secondary" id="voice-photo" type="button" style="margin-top:8px;">Add a crop photo for Crop Doctor</button>
+          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+            <button class="btn btn-secondary" id="voice-repeat" type="button">Repeat last reply</button>
+            <button class="btn btn-secondary" id="voice-reset" type="button">Start over</button>
+          </div>
+          <div id="voice-evidence" style="display:none; margin-top:14px; padding:12px; background:var(--bg); border-radius:8px;"></div>
+        </div>
+        <div class="status-bar" id="sys-status">
+          <div class="loader" style="width:16px;height:16px;border-width:2px;"></div>
+          <span data-i18n="connecting">Connecting to AgriNet...</span>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title" data-i18n="selectField">Select a Field</h2>
+              <p class="card-subtitle" data-i18n="pinDesc">Pin a location or run a deterministic demo scenario.</p>
+            </div>
+            
+            <div id="map"></div>
+            
+            <div style="margin-top: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+              <input type="number" id="lat-input" placeholder="Latitude (e.g. 23.35)" data-i18n-placeholder="latInput" step="0.0001" style="padding: 10px; border: 1px solid var(--border); border-radius: 6px; flex: 1; min-width: 120px;">
+              <input type="number" id="lon-input" placeholder="Longitude (e.g. 80.16)" data-i18n-placeholder="lonInput" step="0.0001" style="padding: 10px; border: 1px solid var(--border); border-radius: 6px; flex: 1; min-width: 120px;">
+              <input type="text" id="crop-input" placeholder="Crop (optional)" data-i18n-placeholder="cropInput" style="padding: 10px; border: 1px solid var(--border); border-radius: 6px; flex: 1.5; min-width: 150px;">
+              <button class="btn" id="btn-analyze" data-i18n="analyzeBtn" style="flex: 1; min-width: 180px;">Analyze Pinned Field</button>
+            </div>
+            <p id="pin-coords" style="font-size: 13px; color: var(--text-muted); margin-top: 8px;" data-i18n="tapMap">Tap map to place pin.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title" data-i18n="scenariosTitle">Interoperability Pilot Scenarios</h2>
+              <p class="card-subtitle" data-i18n="scenariosDesc">Pre-configured demonstrator fields for state network evaluation.</p>
+            </div>
+            
+            <div class="grid-stats" id="scenario-list">
+              <!-- Populated by JS -->
+              <p class="dp-label" data-i18n="loadingScenarios">Loading scenarios...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FIELD INTELLIGENCE -->
+      <section id="view-field" class="view-section">
+        <div id="field-empty" style="text-align:center; padding: 40px; color: var(--text-muted);">
+          <span data-i18n="fieldEmpty">Select a field on the Dashboard to view intelligence.</span>
+        </div>
+        
+        <div id="field-content" style="display: none;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 24px;">
+            <div>
+              <div style="display:flex; gap: 8px; align-items:center; margin-bottom: 8px;">
+                <span id="f-badge-mode" class="badge badge-model">LIVE</span>
+                <span style="font-family: monospace; font-size: 13px; color: var(--text-muted);" id="f-geohash"></span>
+              </div>
+              <h2 class="card-title" style="font-size: 24px;" id="f-location">Location</h2>
+              <p class="card-subtitle" id="f-crop">Crop</p>
+            </div>
+            <button class="btn" id="btn-gen-adv" data-i18n="genAdvisoryBtn">Generate AI Advisory</button>
+          </div>
+
+          <div class="grid-2">
+            <!-- Health & Context -->
+            <div class="card">
+              <h3 class="card-title" style="text-align: center;" data-i18n="healthTitle">Deterministic Field Health</h3>
+              
+              <div class="health-widget">
+                <div class="gauge-circle" id="f-health-ring" data-status="watch">
+                  <div class="gauge-val" id="f-health-score">--</div>
+                  <div class="gauge-max">/ 100</div>
+                </div>
+                <div class="health-status" id="f-health-status">--</div>
+              </div>
+              
+              <div id="f-health-comps" style="margin-top: 16px;">
+                <!-- Components -->
+              </div>
+            </div>
+
+            <!-- Evidence Bundle Summary -->
+            <div class="card">
+              <h3 class="card-title" data-i18n="evidenceTitle">Evidence Bundle</h3>
+              <p class="card-subtitle" data-i18n="evidenceDesc">Structured deterministic observations.</p>
+              
+              <div style="max-height: 350px; overflow-y: auto; margin-top: 16px; padding-right: 8px;" id="f-evidence-list">
+                <!-- Evidence items -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI ADVISORY & REGENERATIVE -->
+      <section id="view-advisory" class="view-section">
+        <div id="adv-empty" style="text-align:center; padding: 40px; color: var(--text-muted);">
+          <span data-i18n="advEmpty">Generate an advisory from the Field Intelligence tab.</span>
+        </div>
+        
+        <div id="adv-loading" style="display:none; text-align:center; padding: 60px;">
+          <div class="loader" style="width:40px;height:40px;margin-bottom:20px;"></div>
+          <h3 style="font-family:var(--font-display);" data-i18n="advLoadingTitle">Gemini Reasoning Engine</h3>
+          <p style="color:var(--text-muted); margin-top:8px;" data-i18n="advLoadingDesc">Synthesizing structured evidence into localized action...</p>
+        </div>
+
+        <div id="adv-content" style="display: none;">
+          <div class="advice-block">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+              <h2 class="card-title" style="font-size: 22px; color: var(--primary);" data-i18n="localizedAdvisory">Localized Advisory</h2>
+              <button class="btn btn-secondary" id="btn-speak" data-i18n="listen">Listen</button>
+            </div>
+            <p style="font-size: 16px; font-weight: 500; margin-top: 12px;" id="adv-summary"></p>
+            <p style="color: var(--text-muted); margin-top: 8px;" id="adv-condition"></p>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <h3 class="card-title" style="margin-bottom: 16px;" data-i18n="priorityActions">Priority Actions</h3>
+              <div id="adv-actions"></div>
+              
+              <h3 class="card-title" style="margin: 24px 0 16px; color:#9a3412;" data-i18n="knownRisks">Known Risks</h3>
+              <div id="adv-risks"></div>
+            </div>
+            
+            <div>
+              <h3 class="card-title" style="margin-bottom: 16px; color:var(--primary);" data-i18n="regenPractices">Regenerative Practices</h3>
+              <div id="adv-regen"></div>
+              
+              <div class="card" style="margin-top:24px; padding: 16px;">
+                <h3 class="card-title" style="font-size: 16px;" data-i18n="cropOptions">Climate-Resilient Crop Options</h3>
+                <div id="adv-crops" style="margin-top: 12px;"></div>
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-top: 24px; padding: 12px; background: #f3f4f6; border-radius: var(--radius-sm); font-size: 13px; color: var(--text-muted);">
+            <strong style="color:var(--text-main);" data-i18n="aiConfidence">AI Confidence Note:</strong> <span id="adv-note"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- CROP DOCTOR -->
+      <section id="view-doctor" class="view-section">
+        <div class="grid-2">
+          <div class="card">
+            <h2 class="card-title" data-i18n="dxTitle">Multimodal Assessment</h2>
+            <p class="card-subtitle" data-i18n="dxDesc">Upload a crop image for Gemini analysis.</p>
+            
+            <div class="drop-zone" id="dx-drop" style="margin-top: 24px;">
+              <div style="font-size: 32px; margin-bottom: 12px;">📸</div>
+              <p style="font-weight: 500;" data-i18n="dropImage">Click or drop image here</p>
+              <input type="file" id="dx-file" accept="image/*" capture="environment">
+            </div>
+            
+            <img id="dx-preview" class="preview-img" src="" alt="Preview">
+            
+            <div style="margin-top: 24px;">
+              <input type="text" id="dx-crop" placeholder="Crop (optional)" data-i18n-placeholder="dxCropInput" style="width:100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 12px;">
+              <button class="btn" id="btn-dx" style="width:100%;" data-i18n="runDxBtn">Run AI Diagnosis</button>
+            </div>
+          </div>
+          
+          <div class="card">
+            <h2 class="card-title" data-i18n="dxResTitle">Assessment Results</h2>
+            <div id="dx-empty" style="padding: 40px 0; text-align:center; color: var(--text-muted);">
+              <span data-i18n="dxEmpty">Awaiting image upload.</span>
+            </div>
+            
+            <div id="dx-loading" style="display:none; text-align:center; padding: 40px 0;">
+              <div class="loader"></div>
+              <p style="margin-top:12px;" data-i18n="dxLoading">Analyzing image...</p>
+            </div>
+            
+            <div id="dx-res" style="display:none; margin-top: 16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
+                <span id="dx-badge" class="badge"></span>
+                <span style="font-size:13px; color:var(--text-muted);" id="dx-conf"></span>
+              </div>
+              
+              <h3 style="font-size: 18px; font-weight:600; margin-bottom: 8px;" id="dx-issue"></h3>
+              <p style="margin-bottom: 16px;" id="dx-diag"></p>
+              
+              <div class="data-point diagnosis-point"><span class="dp-label" data-i18n="symptoms">Symptoms</span><span class="dp-val" id="dx-sym"></span></div>
+              <div class="data-point diagnosis-point"><span class="dp-label" data-i18n="action">Action</span><span class="dp-val" id="dx-act"></span></div>
+              
+              <div style="margin-top: 16px; padding: 12px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; font-size: 13px;">
+                <strong style="color:#b45309;" data-i18n="expertEscalation">Expert Escalation:</strong> <span id="dx-exp"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- NETWORK & DPG -->
+      <section id="view-network" class="view-section">
+        <div class="interop-root" id="interop-root">
+          <div class="interop-hero">
+            <div class="interop-hero-copy"><span class="interop-eyebrow">AGRICULTURE DATA EXCHANGE · DEMO SANDBOX</span><h1>AgriNet Interoperability Network</h1><p>Independent agricultural systems can discover and exchange compatible, attributed data. This workspace uses synthetic records; no state or government system is connected.</p><button class="interop-button interop-button-light" id="interop-jump-exchange">Run cross-state exchange <span aria-hidden="true">↓</span></button></div>
+            <div class="interop-health" id="interop-health" role="status" aria-live="polite"><span class="interop-health-dot"></span><div><strong>Checking system</strong><small>Contacting AgriNet API…</small></div></div>
+          </div>
+          <div id="interop-page-error" class="interop-alert" role="alert" hidden></div>
+          <div class="interop-stat-grid" aria-label="Network summary">
+            <article class="interop-stat"><span class="interop-stat-icon">◎</span><div><small>Demo participants</small><strong id="interop-stat-participants">—</strong><span id="interop-stat-connected">Checking connection status…</span></div></article>
+            <article class="interop-stat"><span class="interop-stat-icon">⌘</span><div><small>Supported schema versions</small><strong id="interop-stat-schemas">—</strong><span>Versioned shared envelope</span></div></article>
+            <article class="interop-stat"><span class="interop-stat-icon">▤</span><div><small>Exchangeable records</small><strong id="interop-stat-records">—</strong><span>Examples are synthetic</span></div></article>
+            <article class="interop-stat"><span class="interop-stat-icon">⇄</span><div><small>Recorded exchange attempts</small><strong id="interop-stat-exchanges">—</strong><span id="interop-stat-accepted">Accepted exchanges: —</span></div></article>
+          </div>
+          <div class="interop-main-grid">
+            <section class="interop-panel" aria-labelledby="interop-participants-title"><div class="interop-section-heading"><div><span class="interop-kicker">PARTICIPATING SYSTEMS</span><h2 id="interop-participants-title">A federated network, ready to connect</h2><p>Demo participants are distinct from verified external integrations.</p></div><span class="interop-badge interop-badge-demo">DEMO FIXTURES</span></div><div id="interop-participants-list" class="interop-participant-grid" aria-live="polite"><div class="interop-skeleton">Loading participants…</div></div><div class="interop-note">ⓘ &nbsp;Real integrations require partner onboarding, agreed schemas, access controls, and applicable consent. No connection to UFSP, AgriStack, ADeX, or Bharat VISTAAR is claimed.</div></section>
+            <section class="interop-panel interop-exchange" id="interop-exchange" aria-labelledby="interop-exchange-title"><div class="interop-section-heading"><div><span class="interop-kicker">GUIDED DEMONSTRATION</span><h2 id="interop-exchange-title">Run cross-state exchange</h2><p>Preview → validate → share, with source attribution preserved.</p></div><span class="interop-step-mark">01 / 03</span></div><form id="interop-exchange-form" class="interop-form"><label>Source participant<select id="interop-source" required></select></label><span class="interop-exchange-arrow" aria-hidden="true">↓</span><label>Destination participant<select id="interop-destination" required></select></label><label>Exchange type<select id="interop-type-select"><option value="practice" selected>Regenerative practice</option><option value="observation">Agricultural observation</option></select></label><label>Shared record<select id="interop-record-select" required></select></label><div class="interop-action-row"><button class="interop-button interop-button-secondary" id="interop-preview" type="button">Preview &amp; validate</button><button class="interop-button interop-button-primary" id="interop-run" type="button" disabled>Start exchange</button><button class="interop-button interop-button-quiet" id="interop-record-rejection" type="button" hidden>Record rejected attempt</button></div></form><div id="interop-record-preview" class="interop-record-preview" hidden></div><div id="interop-validation" class="interop-validation" role="status" aria-live="polite" hidden></div><div id="interop-exchange-result" class="interop-exchange-result" role="status" aria-live="polite" hidden></div><p class="interop-microcopy">Synthetic examples only. Schema compatibility does not mean locally validated advice.</p></section>
+          </div>
+          <section class="interop-panel interop-activity-panel"><div class="interop-section-heading"><div><span class="interop-kicker">AUDIT TRAIL</span><h2>Recent network activity</h2><p>Submissions, discoveries, validation attempts, and exchanges from the demo ledger.</p></div><button class="interop-button interop-button-quiet" id="interop-reset" type="button">Reset demo</button></div><ol id="interop-activity" class="interop-activity-list" aria-live="polite"><li class="interop-empty">Loading activity…</li></ol></section>
+          <div class="interop-tabs" role="tablist" aria-label="Interoperability network sections"><button class="interop-tab" id="interop-tab-records" role="tab" aria-selected="true" aria-controls="interop-panel-records">Data explorer</button><button class="interop-tab" id="interop-tab-practices" role="tab" aria-selected="false" aria-controls="interop-panel-practices" tabindex="-1">Shared practices</button><button class="interop-tab" id="interop-tab-developer" role="tab" aria-selected="false" aria-controls="interop-panel-developer" tabindex="-1">Developer &amp; API</button></div>
+          <section class="interop-panel interop-tab-panel" id="interop-panel-records" role="tabpanel" aria-labelledby="interop-tab-records"><div class="interop-section-heading"><div><span class="interop-kicker">RESOURCE CATALOGUE</span><h2>Agricultural data explorer</h2><p>Search demo records. Schema version identifies the record layout; provenance identifies its source. No farmer identity or exact field location is included.</p></div><span class="interop-badge interop-badge-neutral">SYNTHETIC DATA</span></div><form id="interop-filter-form" class="interop-filters"><label class="interop-search">Search<input id="interop-q" type="search" placeholder="NDVI, residue, evidence" maxlength="120"></label><label>State<select id="interop-filter-state"><option value="">All states</option></select></label><label>District<input id="interop-filter-district" maxlength="80" placeholder="Any district"></label><label>Crop<select id="interop-filter-crop"><option value="">All crops</option></select></label><label>Resource type<select id="interop-filter-type"><option value="">All types</option><option value="observation">Observation</option><option value="practice">Practice</option></select></label><label>From<input id="interop-date-from" type="date"></label><label>To<input id="interop-date-to" type="date"></label><button class="interop-button interop-button-secondary" type="submit">Apply filters</button></form><div class="interop-table-wrap"><table class="interop-table"><thead><tr><th>Resource</th><th>Origin / district</th><th>Crop</th><th>Type</th><th title="Source attribution carried with the record">Source</th><th title="Example observation date; every fixture is synthetic, not current field evidence">Freshness / date</th><th title="Version of the shared record format">Schema</th><th>Status</th></tr></thead><tbody id="interop-record-rows"><tr><td colspan="8" class="interop-empty">Loading catalogue…</td></tr></tbody></table></div><div class="interop-table-footer"><span id="interop-record-count" aria-live="polite">Loading…</span><div><button class="interop-button interop-button-quiet" id="interop-prev" type="button" disabled>← Previous</button><button class="interop-button interop-button-quiet" id="interop-next" type="button" disabled>Next →</button></div></div></section>
+          <section class="interop-panel interop-tab-panel" id="interop-panel-practices" role="tabpanel" aria-labelledby="interop-tab-practices" hidden><div class="interop-section-heading"><div><span class="interop-kicker">KNOWLEDGE DISCOVERY</span><h2>Shared regenerative practices</h2><p>Explore ideas from another region, then check destination suitability locally.</p></div><span class="interop-badge interop-badge-warning">NOT LOCALLY VALIDATED</span></div><div id="interop-practices-list" class="interop-practice-grid"><div class="interop-skeleton">Loading practices…</div></div><div class="interop-note">ⓘ &nbsp;Schema compatibility enables exchange; it does not establish agronomic fit, effectiveness, or a recommendation for a destination farm.</div></section>
+          <section class="interop-panel interop-tab-panel" id="interop-panel-developer" role="tabpanel" aria-labelledby="interop-tab-developer" hidden><div class="interop-section-heading"><div><span class="interop-kicker">INTEGRATION WORKBENCH</span><h2>Developer &amp; API contract</h2><p>The OpenAPI contract is generated from the live FastAPI routes.</p></div><a class="interop-button interop-button-secondary" href="/docs" target="_blank" rel="noopener">Open Swagger UI ↗</a></div><div class="interop-dev-grid"><div><h3>Supported schemas</h3><div id="interop-schema-list" class="interop-schema-list"></div><h3>Demo endpoints</h3><ul class="interop-endpoint-list" id="interop-endpoints"></ul><div class="interop-note">No authentication is configured in this demo. Never expose personal or production data through these routes without partner authentication, authorization, consent policy, and classification.</div></div><div><h3>Exchange request</h3><pre id="interop-request-example" class="interop-code"></pre><h3>Latest actual result</h3><pre id="interop-result-json" class="interop-code">Run a validation or exchange to inspect the response.</pre><a href="/openapi.json" target="_blank" rel="noopener">Open machine-readable OpenAPI JSON ↗</a></div></div><details class="interop-openapi-details"><summary>Inspect relevant paths in the OpenAPI contract</summary><pre id="interop-openapi-preview" class="interop-code">Loading OpenAPI…</pre></details><div class="interop-standards"><span>Design references (no affiliation claimed):</span><a href="https://vistaar.da.gov.in/" target="_blank" rel="noopener">Bharat VISTAAR</a><a href="https://dataforpublicgood.org.in/projects/adex/" target="_blank" rel="noopener">Telangana ADeX</a><a href="https://apisetu.gov.in/api-policy" target="_blank" rel="noopener">India Open API Policy</a><a href="https://docs.geospatial.org.in/docs/consumer/consumer_data_access_apis/" target="_blank" rel="noopener">OGC APIs &amp; STAC</a></div></section>
+          <dialog id="interop-record-dialog" class="interop-dialog" aria-labelledby="interop-dialog-title"><div class="interop-dialog-head"><div><span class="interop-kicker">RESOURCE DETAIL</span><h2 id="interop-dialog-title">Record details</h2></div><button class="interop-close" id="interop-dialog-close" type="button" aria-label="Close record detail">×</button></div><div id="interop-record-detail"></div></dialog>
+        </div>
+              </section>
+
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/new_script.js"></script>
+
+</body>
+</html>
