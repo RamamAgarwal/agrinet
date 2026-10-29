@@ -1718,5 +1718,5 @@ Satellite + Soil + Weather
       Farmer Action
 ```
 
-**Live:** [https://agrinet-india.onrender.com/](https://agrinet-india.onrender.com/)
+**Live:** [https://agrinet-india.onrender.com/](https://agrinet-india.onrender.com/](https://agrinet-rz5r.onrender.com/)
 
